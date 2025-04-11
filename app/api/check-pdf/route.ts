@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import * as pdfParse from 'pdf-parse';
+import pdfParse from 'pdf-parse';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,7 +20,7 @@ export async function POST(request: Request) {
     const buffer = Buffer.from(arrayBuffer);
     
     // Parse PDF content
-    const pdfData = await pdfParse.default(buffer);
+    const pdfData = await pdfParse(buffer);
     const pdfText = pdfData.text;
     
     // Simple check for URLs in the PDF

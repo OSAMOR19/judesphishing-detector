@@ -16,6 +16,26 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
+  webpack: (config, { isServer }) => {
+    // Fixes npm packages that depend on `Buffer` or other Node.js globals
+    if (!isServer) {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+        buffer: require.resolve('buffer/'),
+        stream: require.resolve('stream-browserify'),
+        util: require.resolve('util/'),
+        crypto: require.resolve('crypto-browserify'),
+      };
+      config.plugins.push(
+        new (require('webpack')).ProvidePlugin({
+          Buffer: ['buffer', 'Buffer'],
+          process: 'process/browser',
+        })
+      );
+    }
+    return config;
+  },
   experimental: {
     webpackBuildWorker: true,
     parallelServerBuildTraces: true,
