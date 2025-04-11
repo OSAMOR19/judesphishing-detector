@@ -1,10 +1,3 @@
-let userConfig = undefined
-try {
-  userConfig = await import('./v0-user-next.config')
-} catch (e) {
-  // ignore error
-}
-
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   eslint: {
@@ -16,26 +9,6 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
-  webpack: (config, { isServer }) => {
-    // Fixes npm packages that depend on `Buffer` or other Node.js globals
-    if (!isServer) {
-      config.resolve.fallback = {
-        ...config.resolve.fallback,
-        fs: false,
-        buffer: require.resolve('buffer/'),
-        stream: require.resolve('stream-browserify'),
-        util: require.resolve('util/'),
-        crypto: require.resolve('crypto-browserify'),
-      };
-      config.plugins.push(
-        new (require('webpack')).ProvidePlugin({
-          Buffer: ['buffer', 'Buffer'],
-          process: 'process/browser',
-        })
-      );
-    }
-    return config;
-  },
   experimental: {
     webpackBuildWorker: true,
     parallelServerBuildTraces: true,
@@ -43,26 +16,29 @@ const nextConfig = {
   },
 }
 
-mergeConfig(nextConfig, userConfig)
-
-function mergeConfig(nextConfig, userConfig) {
-  if (!userConfig) {
-    return
-  }
-
-  for (const key in userConfig) {
-    if (
-      typeof nextConfig[key] === 'object' &&
-      !Array.isArray(nextConfig[key])
-    ) {
-      nextConfig[key] = {
-        ...nextConfig[key],
-        ...userConfig[key],
+// Try to import user config if it exists
+let userConfig = undefined
+try {
+  userConfig = await import('./v0-user-next.config')
+  
+  // Merge configs
+  if (userConfig.default) {
+    for (const key in userConfig.default) {
+      if (
+        typeof nextConfig[key] === 'object' &&
+        !Array.isArray(nextConfig[key])
+      ) {
+        nextConfig[key] = {
+          ...nextConfig[key],
+          ...userConfig.default[key],
+        }
+      } else {
+        nextConfig[key] = userConfig.default[key]
       }
-    } else {
-      nextConfig[key] = userConfig[key]
     }
   }
+} catch (e) {
+  // ignore error
 }
 
 export default nextConfig
