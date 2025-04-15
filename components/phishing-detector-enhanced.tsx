@@ -160,7 +160,7 @@ export default function PhishingDetectorEnhanced() {
         <div className="flex justify-between items-center mb-8">
           <div className="flex items-center gap-2">
             <Shield className="w-8 h-8 text-primary" />
-            <h1 className="text-2xl font-bold">PhishGuard</h1>
+            <h1 className="text-2xl font-bold">OdaneGuard</h1>
           </div>
           <div className="flex items-center gap-2">
             <Button
