@@ -93,7 +93,7 @@ export async function POST(request: Request) {
     const threatLevel = calculateThreatLevel(stats)
     const recommendations = generateRecommendations(stats, threatLevel)
     
-    // Get domain information
+    // Get domain information using WHOIS API
     const domainInfo = await getDomainInfo(input)
 
     return NextResponse.json({
@@ -179,19 +179,82 @@ function generateRecommendations(stats: any, threatLevel: string) {
   return recommendations
 }
 
-// Mock function to get domain information
+// Get domain information using WHOIS API
 async function getDomainInfo(url: string) {
-  // In a real app, you would use a WHOIS API or similar
-  // For now, we'll return mock data
-  return {
-    domain_age: "2 years, 3 months",
-    registrar: "GoDaddy.com, LLC",
-    creation_date: "2022-11-15",
-    expiration_date: "2025-11-15",
-    location: "United States",
-    country: "US",
-    ipAddress: "192.168.1.1",
-    has_ssl: true,
-    redirects: false,
+  try {
+    // Extract domain from URL
+    const domain = new URL(url).hostname;
+    
+    // Call our WHOIS API endpoint
+    const response = await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/whois`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ domain }),
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch WHOIS data');
+    }
+
+    const whoisData = await response.json();
+    
+    // Calculate domain age
+    let domainAge = 'Unknown';
+    if (whoisData.creationDate !== 'Unknown') {
+      const creationDate = new Date(whoisData.creationDate);
+      const now = new Date();
+      const ageInYears = now.getFullYear() - creationDate.getFullYear();
+      const ageInMonths = now.getMonth() - creationDate.getMonth();
+      const totalMonths = ageInYears * 12 + ageInMonths;
+      
+      if (totalMonths < 12) {
+        domainAge = `${totalMonths} months`;
+      } else {
+        const years = Math.floor(totalMonths / 12);
+        const remainingMonths = totalMonths % 12;
+        domainAge = `${years} year${years > 1 ? 's' : ''}${remainingMonths > 0 ? `, ${remainingMonths} month${remainingMonths > 1 ? 's' : ''}` : ''}`;
+      }
+    }
+
+    // Check for redirects by examining name servers
+    const hasRedirects = whoisData.nameServers.some((ns: string) => 
+      ns.toLowerCase().includes('redirect') || 
+      ns.toLowerCase().includes('forward')
+    );
+
+    return {
+      domain_age: domainAge,
+      registrar: whoisData.registrarName,
+      creation_date: whoisData.creationDate,
+      expiration_date: whoisData.expirationDate,
+      location: whoisData.registrant.country,
+      country: whoisData.registrant.countryCode,
+      ipAddress: whoisData.nameServers[0] || 'Unknown',
+      has_ssl: whoisData.hasSSL,
+      redirects: hasRedirects,
+      is_private: whoisData.isPrivate,
+      is_proxy: whoisData.isProxy,
+      name_servers: whoisData.nameServers,
+      domain_status: whoisData.status,
+    };
+  } catch (error) {
+    console.error('Error fetching domain info:', error);
+    return {
+      domain_age: 'Unknown',
+      registrar: 'Unknown',
+      creation_date: 'Unknown',
+      expiration_date: 'Unknown',
+      location: 'Unknown',
+      country: 'Unknown',
+      ipAddress: 'Unknown',
+      has_ssl: false,
+      redirects: false,
+      is_private: false,
+      is_proxy: false,
+      name_servers: [],
+      domain_status: [],
+    };
   }
 }
