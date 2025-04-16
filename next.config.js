@@ -14,6 +14,9 @@ const nextConfig = {
     parallelServerBuildTraces: true,
     parallelServerCompiles: true,
   },
+  env: {
+    VIRUSTOTAL_API_KEY: process.env.VIRUSTOTAL_API_KEY,
+  },
 }
 
-module.exports = nextConfig 
+module.exports = nextConfig

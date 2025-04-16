@@ -18,6 +18,8 @@ yarn-error.log*
 
 # env files
 .env*
+# VirusTotal API Key
+VIRUSTOTAL_API_KEY= 3cd6beb958103747337bda28126b98f0ce623b04ad0f6400f6b8265bfa34e4d4
 
 # vercel
 .vercel

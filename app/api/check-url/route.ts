@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server"
 
-// This is a mock implementation - in a real app, you would use the VirusTotal API
 export async function POST(request: Request) {
   try {
     const { input } = await request.json()
@@ -9,22 +8,93 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: "URL is required" }, { status: 400 })
     }
 
-    // Simulate API call to VirusTotal
-    // In a real app, you would use the VirusTotal API client
+    // Get VirusTotal API key from environment variables
+    const apiKey = process.env.VIRUSTOTAL_API_KEY
+    
+    if (!apiKey) {
+      console.error("VirusTotal API key not found")
+      return NextResponse.json({ message: "API configuration error" }, { status: 500 })
+    }
+
     console.log(`Checking URL: ${input}`)
 
-    // For demo purposes, we'll return mock data
-    // In a real app, this would be the response from VirusTotal
-    const isMalicious = input.includes("suspicious") || input.includes("malicious")
+    // Prepare URL for VirusTotal API
+    const encodedUrl = encodeURIComponent(input)
+    
+    // First, check if the URL has already been analyzed
+    const reportResponse = await fetch(
+      `https://www.virustotal.com/api/v3/urls/${encodedUrl}/analyse`,
+      {
+        method: "GET",
+        headers: {
+          "x-apikey": apiKey,
+          "Content-Type": "application/json",
+        },
+      }
+    )
 
+    let result
+    let analysisId
+
+    // If the URL hasn't been analyzed before or we need fresh results
+    if (!reportResponse.ok || reportResponse.status === 404) {
+      // Submit URL for scanning
+      const scanResponse = await fetch(
+        "https://www.virustotal.com/api/v3/urls",
+        {
+          method: "POST",
+          headers: {
+            "x-apikey": apiKey,
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+          body: `url=${encodedUrl}`,
+        }
+      )
+
+      if (!scanResponse.ok) {
+        throw new Error(`VirusTotal scan failed: ${scanResponse.statusText}`)
+      }
+
+      const scanData = await scanResponse.json()
+      analysisId = scanData.data.id
+
+      // Wait for analysis to complete (this might take some time)
+      // In a production app, you might want to implement a webhook or polling mechanism
+      await new Promise(resolve => setTimeout(resolve, 5000))
+
+      // Get the analysis results
+      const analysisResponse = await fetch(
+        `https://www.virustotal.com/api/v3/analyses/${analysisId}`,
+        {
+          method: "GET",
+          headers: {
+            "x-apikey": apiKey,
+            "Content-Type": "application/json",
+          },
+        }
+      )
+
+      if (!analysisResponse.ok) {
+        throw new Error(`VirusTotal analysis failed: ${analysisResponse.statusText}`)
+      }
+
+      result = await analysisResponse.json()
+    } else {
+      result = await reportResponse.json()
+    }
+
+    // Extract relevant information from the VirusTotal response
+    const stats = result.data.attributes.stats
+    const scanDate = result.data.attributes.date
+    
     // Get domain information
     const domainInfo = await getDomainInfo(input)
 
     return NextResponse.json({
       status: "success",
-      positives: isMalicious ? 5 : 0,
-      total: 68,
-      scan_date: new Date().toISOString(),
+      positives: stats.malicious,
+      total: stats.malicious + stats.suspicious + stats.harmless + stats.undetected,
+      scan_date: new Date(scanDate * 1000).toISOString(),
       url: input,
       ...domainInfo,
     })
@@ -50,4 +120,3 @@ async function getDomainInfo(url: string) {
     redirects: false,
   }
 }
-
