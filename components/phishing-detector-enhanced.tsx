@@ -41,6 +41,12 @@ interface ScanResult {
   country?: string
   ipAddress?: string
   emailBody?: string
+  threat_level?: "HIGH" | "MEDIUM" | "LOW" | "UNKNOWN"
+  recommendations?: Array<{
+    severity: "critical" | "warning" | "info" | "success"
+    message: string
+    action: string
+  }>
 }
 
 export default function PhishingDetectorEnhanced() {
@@ -104,18 +110,22 @@ export default function PhishingDetectorEnhanced() {
         throw new Error(data.message || "Failed to scan input")
       }
 
-      setResult({
+      // Transform the data to match our ScanResult interface
+      const transformedData: ScanResult = {
         status: data.status,
         isMalicious: data.positives > 0,
         positives: data.positives,
         total: data.total,
         scan_date: data.scan_date,
-        message: data.message,
+        threat_level: data.threat_level,
+        recommendations: data.recommendations,
         location: data.location,
         country: data.country,
         ipAddress: data.ipAddress,
-        emailBody: data.emailBody,
-      })
+        message: data.message
+      }
+
+      setResult(transformedData)
 
       if (data.status === "success") {
         toast.success("Scan completed")

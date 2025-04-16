@@ -8,9 +8,22 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 
+interface ScanResult {
+  status: string
+  positives: number
+  total: number
+  scan_date: string
+  threat_level: "HIGH" | "MEDIUM" | "LOW" | "UNKNOWN"
+  recommendations: Array<{
+    severity: "critical" | "warning" | "info" | "success"
+    message: string
+    action: string
+  }>
+}
+
 interface UrlDetailsProps {
   url: string
-  scanResult: any
+  scanResult: ScanResult
 }
 
 export function UrlDetails({ url, scanResult }: UrlDetailsProps) {
@@ -37,6 +50,19 @@ export function UrlDetails({ url, scanResult }: UrlDetailsProps) {
     return "bg-red-500"
   }
 
+  const getThreatLevelColor = (level: string) => {
+    switch (level) {
+      case "HIGH":
+        return "text-red-500"
+      case "MEDIUM":
+        return "text-yellow-500"
+      case "UNKNOWN":
+        return "text-blue-500"
+      default:
+        return "text-green-500"
+    }
+  }
+
   return (
     <div className="grid gap-4 md:grid-cols-2">
       <Card>
@@ -55,7 +81,7 @@ export function UrlDetails({ url, scanResult }: UrlDetailsProps) {
             </div>
             <div>
               <p className="text-sm font-medium text-muted-foreground mb-1">SSL Certificate</p>
-              <Badge variant={domainInfo.ssl ? "success" : "destructive"}>
+              <Badge variant={domainInfo.ssl ? "default" : "destructive"}>
                 {domainInfo.ssl ? "Valid" : "Invalid/Missing"}
               </Badge>
             </div>
@@ -104,39 +130,17 @@ export function UrlDetails({ url, scanResult }: UrlDetailsProps) {
             <AccordionItem value="item-1">
               <AccordionTrigger>
                 <div className="flex items-center gap-2">
-                  <AlertTriangle className="h-4 w-4 text-yellow-500" />
-                  <span>Phishing Indicators</span>
-                </div>
-              </AccordionTrigger>
-              <AccordionContent>
-                <ul className="space-y-2 text-sm">
-                  <li className="flex items-center gap-2">
-                    <Badge variant="outline">Medium Risk</Badge>
-                    Domain age less than 3 years
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Badge variant="outline">Low Risk</Badge>
-                    Similar to known brand names
-                  </li>
-                </ul>
-              </AccordionContent>
-            </AccordionItem>
-
-            <AccordionItem value="item-2">
-              <AccordionTrigger>
-                <div className="flex items-center gap-2">
-                  <Calendar className="h-4 w-4 text-blue-500" />
-                  <span>Historical Data</span>
+                  <AlertTriangle className={`h-4 w-4 ${getThreatLevelColor(scanResult.threat_level)}`} />
+                  <span>Scan Results</span>
                 </div>
               </AccordionTrigger>
               <AccordionContent>
                 <div className="space-y-2 text-sm">
-                  <p>This domain has been scanned 3 times previously:</p>
-                  <ul className="list-disc pl-5 space-y-1">
-                    <li>2025-01-15: No threats detected</li>
-                    <li>2024-12-10: No threats detected</li>
-                    <li>2024-11-22: No threats detected</li>
-                  </ul>
+                  <p>Scan Date: {new Date(scanResult.scan_date).toLocaleString()}</p>
+                  <p>Detections: {scanResult.positives} out of {scanResult.total} security vendors</p>
+                  <Badge variant={scanResult.threat_level === "HIGH" ? "destructive" : "default"}>
+                    {scanResult.threat_level} Risk
+                  </Badge>
                 </div>
               </AccordionContent>
             </AccordionItem>
@@ -145,14 +149,73 @@ export function UrlDetails({ url, scanResult }: UrlDetailsProps) {
           <div className="mt-4 pt-4 border-t">
             <h4 className="font-medium mb-2">Recommendations</h4>
             <ul className="space-y-2 text-sm">
-              <li className="flex items-start gap-2">
-                <Shield className="h-4 w-4 mt-0.5 text-green-500" />
-                This URL appears to be safe based on our analysis
-              </li>
-              <li className="flex items-start gap-2">
-                <Shield className="h-4 w-4 mt-0.5 text-green-500" />
-                Always verify the sender before clicking links in emails
-              </li>
+              {scanResult.threat_level && (
+                <>
+                  {scanResult.threat_level === "HIGH" && (
+                    <>
+                      <li className="flex items-start gap-2">
+                        <AlertTriangle className="h-4 w-4 mt-0.5 text-red-500" />
+                        <span className="text-red-500 font-medium">WARNING: This URL has been flagged as malicious!</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <AlertTriangle className="h-4 w-4 mt-0.5 text-red-500" />
+                        Do not visit this URL. It may contain malware or be a phishing site.
+                      </li>
+                    </>
+                  )}
+                  {scanResult.threat_level === "MEDIUM" && (
+                    <>
+                      <li className="flex items-start gap-2">
+                        <AlertTriangle className="h-4 w-4 mt-0.5 text-yellow-500" />
+                        <span className="text-yellow-500 font-medium">CAUTION: This URL shows suspicious activity</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <AlertTriangle className="h-4 w-4 mt-0.5 text-yellow-500" />
+                        Exercise caution. Consider using additional security measures if you need to visit this site.
+                      </li>
+                    </>
+                  )}
+                  {scanResult.threat_level === "UNKNOWN" && (
+                    <>
+                      <li className="flex items-start gap-2">
+                        <Shield className="h-4 w-4 mt-0.5 text-blue-500" />
+                        <span className="text-blue-500 font-medium">This URL hasn't been thoroughly analyzed yet</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <Shield className="h-4 w-4 mt-0.5 text-blue-500" />
+                        Proceed with caution. The site's safety cannot be fully determined.
+                      </li>
+                    </>
+                  )}
+                  {scanResult.threat_level === "LOW" && (
+                    <>
+                      <li className="flex items-start gap-2">
+                        <Shield className="h-4 w-4 mt-0.5 text-green-500" />
+                        This URL appears to be safe based on our analysis
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <Shield className="h-4 w-4 mt-0.5 text-green-500" />
+                        Always verify the sender before clicking links in emails
+                      </li>
+                    </>
+                  )}
+                </>
+              )}
+              {scanResult.recommendations?.map((rec, index) => (
+                <li key={index} className="flex items-start gap-2">
+                  {rec.severity === "critical" && <AlertTriangle className="h-4 w-4 mt-0.5 text-red-500" />}
+                  {rec.severity === "warning" && <AlertTriangle className="h-4 w-4 mt-0.5 text-yellow-500" />}
+                  {rec.severity === "info" && <Shield className="h-4 w-4 mt-0.5 text-blue-500" />}
+                  {rec.severity === "success" && <Shield className="h-4 w-4 mt-0.5 text-green-500" />}
+                  <span>{rec.message}</span>
+                </li>
+              ))}
+              {!scanResult.threat_level && !scanResult.recommendations?.length && (
+                <li className="flex items-start gap-2">
+                  <Shield className="h-4 w-4 mt-0.5 text-gray-500" />
+                  <span>No specific recommendations available for this URL.</span>
+                </li>
+              )}
             </ul>
           </div>
         </CardContent>
