@@ -47,6 +47,8 @@ interface ScanResult {
     message: string
     action: string
   }>
+  urls?: string[]
+  isPdf?: boolean
 }
 
 export default function PhishingDetectorEnhanced() {
@@ -98,10 +100,23 @@ export default function PhishingDetectorEnhanced() {
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(errorText.includes('<!DOCTYPE') 
-          ? 'Server error occurred' 
-          : errorText);
+        let errorMessage = "Server error occurred";
+        try {
+          const errorText = await response.text();
+          if (errorText.includes('<!DOCTYPE')) {
+            errorMessage = 'Server error occurred';
+          } else {
+            try {
+              const errorJson = JSON.parse(errorText);
+              errorMessage = errorJson.message || errorText;
+            } catch {
+              errorMessage = errorText;
+            }
+          }
+        } catch (e) {
+          console.error("Error parsing error response:", e);
+        }
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();
@@ -122,7 +137,11 @@ export default function PhishingDetectorEnhanced() {
         location: data.location,
         country: data.country,
         ipAddress: data.ipAddress,
-        message: data.message
+        message: data.message,
+        // Include URLs found in PDF if available
+        urls: data.urls || [],
+        // Set isPdf flag for PDF scans
+        isPdf: activeTab === "pdf",
       }
 
       setResult(transformedData)
@@ -331,11 +350,11 @@ export default function PhishingDetectorEnhanced() {
                           <div className="flex gap-2 flex-wrap">
                             {result.status === "success" && (
                               <>
-                                <Badge variant={result.isMalicious ? "destructive" : "success"}>
+                                <Badge variant={result.isMalicious ? "destructive" : "default"}>
                                   {result.positives} / {result.total} scanners
                                 </Badge>
-                                <Badge variant={result.isMalicious ? "destructive" : "success"}>
-                                  {result.isMalicious ? "High Risk" : "Low Risk"}
+                                <Badge variant={result.isMalicious ? "destructive" : "default"}>
+                                  {result.isMalicious ? "Malicious" : "Safe"}
                                 </Badge>
                               </>
                             )}
@@ -420,7 +439,7 @@ export default function PhishingDetectorEnhanced() {
                           <p className="font-medium text-sm">{item.input}</p>
                           <p className="text-xs text-muted-foreground">{new Date(item.date).toLocaleString()}</p>
                         </div>
-                        <Badge className="ml-auto" variant={item.result === "malicious" ? "destructive" : "success"}>
+                        <Badge className="ml-auto" variant={item.result === "malicious" ? "destructive" : "default"}>
                           {item.result}
                         </Badge>
                       </div>

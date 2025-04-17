@@ -36,6 +36,9 @@ interface ScanResult {
   is_proxy?: boolean
   name_servers?: Array<string>
   domain_status?: Array<string>
+  // PDF-specific properties
+  urls?: Array<string>
+  isPdf?: boolean
 }
 
 interface UrlDetailsProps {
@@ -134,46 +137,100 @@ export function UrlDetails({ url, scanResult }: UrlDetailsProps) {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Globe className="h-5 w-5" />
-            Domain Information
+            {scanResult.isPdf ? "PDF Information" : "Domain Information"}
           </CardTitle>
-          <CardDescription>Technical details about this domain</CardDescription>
+          <CardDescription>
+            {scanResult.isPdf ? "Technical details about this PDF" : "Technical details about this domain"}
+          </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <p className="text-sm font-medium text-muted-foreground mb-1">Domain Age</p>
-              <p className="font-medium">{domainInfo.domainAge}</p>
-            </div>
-            <div>
-              <p className="text-sm font-medium text-muted-foreground mb-1">SSL Certificate</p>
-              <Badge variant={domainInfo.ssl ? "default" : "destructive"}>
-                {domainInfo.ssl ? "Valid" : "Invalid/Missing"}
-              </Badge>
-            </div>
-            <div>
-              <p className="text-sm font-medium text-muted-foreground mb-1">Redirects</p>
-              <Badge variant={domainInfo.redirects ? "destructive" : "outline"}>
-                {domainInfo.redirects ? "Yes" : "No"}
-              </Badge>
-            </div>
-            <div>
-              <p className="text-sm font-medium text-muted-foreground mb-1">Registrar</p>
-              <p className="font-medium">{domainInfo.registrar}</p>
-            </div>
-          </div>
+          {scanResult.isPdf ? (
+            // PDF-specific information
+            <>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground mb-1">File Type</p>
+                  <p className="font-medium">PDF Document</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground mb-1">Detections</p>
+                  <Badge variant={scanResult.positives && scanResult.positives > 0 ? "destructive" : "default"}>
+                    {scanResult.positives} / {scanResult.total} scanners
+                  </Badge>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground mb-1">URLs Found</p>
+                  <Badge variant={scanResult.urls && scanResult.urls.length > 0 ? "default" : "outline"}>
+                    {scanResult.urls ? scanResult.urls.length : 0} URLs
+                  </Badge>
+                </div>
+              </div>
 
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <p className="text-sm font-medium text-muted-foreground">Reputation Score</p>
-              <p className="text-sm font-medium">{domainInfo.reputationScore}/100</p>
-            </div>
-            <Progress value={domainInfo.reputationScore} className={getReputationColor(domainInfo.reputationScore)} />
-          </div>
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-sm font-medium text-muted-foreground">Reputation Score</p>
+                  <p className="text-sm font-medium">{domainInfo.reputationScore}/100</p>
+                </div>
+                <Progress value={domainInfo.reputationScore} className={getReputationColor(domainInfo.reputationScore)} />
+              </div>
+
+              {scanResult.urls && scanResult.urls.length > 0 && (
+                <div className="mt-2">
+                  <p className="text-sm font-medium text-muted-foreground mb-1">URLs Found in PDF</p>
+                  <div className="max-h-32 overflow-y-auto bg-muted p-2 rounded-md">
+                    <ul className="text-xs space-y-1">
+                      {scanResult.urls.map((url, index) => (
+                        <li key={index} className="truncate">
+                          <a href={url} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">
+                            {url}
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            // Domain-specific information
+            <>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground mb-1">Domain Age</p>
+                  <p className="font-medium">{domainInfo.domainAge}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground mb-1">SSL Certificate</p>
+                  <Badge variant={domainInfo.ssl ? "default" : "destructive"}>
+                    {domainInfo.ssl ? "Valid" : "Invalid/Missing"}
+                  </Badge>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground mb-1">Redirects</p>
+                  <Badge variant={domainInfo.redirects ? "destructive" : "outline"}>
+                    {domainInfo.redirects ? "Yes" : "No"}
+                  </Badge>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground mb-1">Registrar</p>
+                  <p className="font-medium">{domainInfo.registrar}</p>
+                </div>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-sm font-medium text-muted-foreground">Reputation Score</p>
+                  <p className="text-sm font-medium">{domainInfo.reputationScore}/100</p>
+                </div>
+                <Progress value={domainInfo.reputationScore} className={getReputationColor(domainInfo.reputationScore)} />
+              </div>
+            </>
+          )}
 
           <div className="flex justify-between items-center">
             <Button variant="outline" size="sm" className="gap-1">
               <ExternalLink className="h-4 w-4" />
-              Visit Website
+              {scanResult.isPdf ? "Download PDF" : "Visit Website"}
             </Button>
             <p className="text-xs text-muted-foreground">
               Last updated: {domainInfo.lastUpdated !== "Unknown" ? new Date(domainInfo.lastUpdated).toLocaleDateString() : "Unknown"}
