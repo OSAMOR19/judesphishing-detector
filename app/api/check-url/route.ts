@@ -36,8 +36,12 @@ export async function POST(request: Request) {
     let result
     let analysisId
 
+    // Log the initial response status
+    console.log('VirusTotal initial response status:', reportResponse.status)
+
     // If the URL hasn't been analyzed before or we need fresh results
     if (!reportResponse.ok || reportResponse.status === 404) {
+      console.log('Submitting URL for new analysis')
       // Submit URL for scanning
       const scanResponse = await fetch(
         "https://www.virustotal.com/api/v3/urls",
@@ -59,9 +63,10 @@ export async function POST(request: Request) {
       const scanData = await scanResponse.json()
       analysisId = scanData.data.id
 
+      console.log('Analysis ID:', analysisId)
+
       // Wait for analysis to complete (this might take some time)
-      // In a production app, you might want to implement a webhook or polling mechanism
-      await new Promise(resolve => setTimeout(resolve, 5000))
+      await new Promise(resolve => setTimeout(resolve, 15000)) // Increased wait time to 15 seconds
 
       // Get the analysis results
       const analysisResponse = await fetch(
@@ -85,6 +90,9 @@ export async function POST(request: Request) {
       result = await reportResponse.json()
     }
 
+    // Log the full result for debugging
+    console.log('VirusTotal result:', JSON.stringify(result, null, 2))
+
     // Extract relevant information from the VirusTotal response
     const stats = result.data.attributes.stats
     const scanDate = result.data.attributes.date
@@ -95,6 +103,13 @@ export async function POST(request: Request) {
     
     // Get domain information using WHOIS API
     const domainInfo = await getDomainInfo(input)
+
+    // Log final response data
+    console.log('Final response:', {
+      stats,
+      threatLevel,
+      recommendations
+    })
 
     return NextResponse.json({
       status: "success",
@@ -118,9 +133,17 @@ function calculateThreatLevel(stats: any) {
   const maliciousPercentage = (stats.malicious / totalScans) * 100
   const suspiciousPercentage = (stats.suspicious / totalScans) * 100
 
-  if (stats.malicious > 5 || maliciousPercentage > 20) {
+  console.log('Threat calculation:', {
+    stats,
+    totalScans,
+    maliciousPercentage,
+    suspiciousPercentage
+  })
+
+  // More sensitive thresholds for malicious detections
+  if (stats.malicious >= 2 || maliciousPercentage >= 2) {
     return "HIGH"
-  } else if (stats.malicious > 0 || stats.suspicious > 3 || suspiciousPercentage > 10) {
+  } else if (stats.malicious > 0 || stats.suspicious > 2 || suspiciousPercentage > 5) {
     return "MEDIUM"
   } else if (stats.undetected > totalScans * 0.5) {
     return "UNKNOWN"
@@ -185,8 +208,11 @@ async function getDomainInfo(url: string) {
     // Extract domain from URL
     const domain = new URL(url).hostname;
     
+    // Get the base URL for API calls
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    
     // Call our WHOIS API endpoint
-    const response = await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/whois`, {
+    const response = await fetch(`${baseUrl}/api/whois`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -241,6 +267,7 @@ async function getDomainInfo(url: string) {
     };
   } catch (error) {
     console.error('Error fetching domain info:', error);
+    // Return default domain info if WHOIS lookup fails
     return {
       domain_age: 'Unknown',
       registrar: 'Unknown',
