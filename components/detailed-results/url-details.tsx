@@ -7,60 +7,27 @@ import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
-
-interface ScanResult {
-  status: "success" | "unknown" | "error"
-  isMalicious?: boolean
-  positives?: number
-  total?: number
-  scan_date?: string
-  message?: string
-  location?: string
-  country?: string
-  ipAddress?: string
-  emailBody?: string
-  threat_level?: "HIGH" | "MEDIUM" | "LOW" | "UNKNOWN"
-  recommendations?: Array<{
-    severity: "critical" | "warning" | "info" | "success"
-    message: string
-    action: string
-  }>
-  // Domain information properties
-  domain_age?: string
-  has_ssl?: boolean
-  redirects?: boolean
-  registrar?: string
-  creation_date?: string
-  expiration_date?: string
-  is_private?: boolean
-  is_proxy?: boolean
-  name_servers?: Array<string>
-  domain_status?: Array<string>
-  // PDF-specific properties
-  urls?: Array<string>
-  isPdf?: boolean
-}
+import { ScanResult } from "@/types/scan"
 
 interface UrlDetailsProps {
-  url: string
-  scanResult: ScanResult
+  result: ScanResult
 }
 
-export function UrlDetails({ url, scanResult }: UrlDetailsProps) {
+export function UrlDetails({ result }: UrlDetailsProps) {
   // Use the actual data from the API response
   const domainInfo = {
-    domainAge: scanResult.domain_age || "Unknown",
-    ssl: scanResult.has_ssl || false,
-    redirects: scanResult.redirects || false,
-    reputationScore: calculateReputationScore(scanResult),
-    registrar: scanResult.registrar || "Unknown",
-    ipAddress: scanResult.ipAddress || "Unknown",
-    country: scanResult.country || "Unknown",
-    lastUpdated: scanResult.creation_date || "Unknown",
-    isPrivate: scanResult.is_private || false,
-    isProxy: scanResult.is_proxy || false,
-    nameServers: scanResult.name_servers || [],
-    domainStatus: scanResult.domain_status || [],
+    domainAge: result.domain_age || "Unknown",
+    ssl: result.has_ssl || false,
+    redirects: result.redirects || false,
+    reputationScore: calculateReputationScore(result),
+    registrar: result.registrar || "Unknown",
+    ipAddress: result.ipAddress || "Unknown",
+    country: result.country || "Unknown",
+    lastUpdated: result.creation_date || "Unknown",
+    isPrivate: result.is_private || false,
+    isProxy: result.is_proxy || false,
+    nameServers: result.name_servers || [],
+    domainStatus: result.domain_status || [],
   }
 
   // Calculate reputation score based on various factors
@@ -137,14 +104,14 @@ export function UrlDetails({ url, scanResult }: UrlDetailsProps) {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Globe className="h-5 w-5" />
-            {scanResult.isPdf ? "PDF Information" : "Domain Information"}
+            {result.isPdf ? "PDF Information" : "Domain Information"}
           </CardTitle>
           <CardDescription>
-            {scanResult.isPdf ? "Technical details about this PDF" : "These are the Technical details about this domain"}
+            {result.isPdf ? "Technical details about this PDF" : "These are the Technical details about this domain"}
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
-          {scanResult.isPdf ? (
+          {result.isPdf ? (
             // PDF-specific information
             <>
               <div className="grid grid-cols-2 gap-4">
@@ -154,14 +121,14 @@ export function UrlDetails({ url, scanResult }: UrlDetailsProps) {
                 </div>
                 <div>
                   <p className="text-sm font-medium text-muted-foreground mb-1">Detections</p>
-                  <Badge variant={scanResult.positives && scanResult.positives > 0 ? "destructive" : "default"}>
-                    {scanResult.positives} / {scanResult.total} scanners
+                  <Badge variant={result.positives && result.positives > 0 ? "destructive" : "default"}>
+                    {result.positives} / {result.total} scanners
                   </Badge>
                 </div>
                 <div>
                   <p className="text-sm font-medium text-muted-foreground mb-1">URLs Found</p>
-                  <Badge variant={scanResult.urls && scanResult.urls.length > 0 ? "default" : "outline"}>
-                    {scanResult.urls ? scanResult.urls.length : 0} URLs
+                  <Badge variant={result.urls && result.urls.length > 0 ? "default" : "outline"}>
+                    {result.urls ? result.urls.length : 0} URLs
                   </Badge>
                 </div>
               </div>
@@ -174,12 +141,12 @@ export function UrlDetails({ url, scanResult }: UrlDetailsProps) {
                 <Progress value={domainInfo.reputationScore} className={getReputationColor(domainInfo.reputationScore)} />
               </div>
 
-              {scanResult.urls && scanResult.urls.length > 0 && (
+              {result.urls && result.urls.length > 0 && (
                 <div className="mt-2">
                   <p className="text-sm font-medium text-muted-foreground mb-1">URLs Found in PDF</p>
                   <div className="max-h-32 overflow-y-auto bg-muted p-2 rounded-md">
                     <ul className="text-xs space-y-1">
-                      {scanResult.urls.map((url, index) => (
+                      {result.urls.map((url, index) => (
                         <li key={index} className="truncate">
                           <a href={url} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">
                             {url}
@@ -230,7 +197,7 @@ export function UrlDetails({ url, scanResult }: UrlDetailsProps) {
           <div className="flex justify-between items-center">
             <Button variant="outline" size="sm" className="gap-1">
               <ExternalLink className="h-4 w-4" />
-              {scanResult.isPdf ? "Download PDF" : "Visit Website"}
+              {result.isPdf ? "Download PDF" : "Visit Website"}
             </Button>
             <p className="text-xs text-muted-foreground">
               Last updated: {domainInfo.lastUpdated !== "Unknown" ? new Date(domainInfo.lastUpdated).toLocaleDateString() : "Unknown"}
@@ -252,16 +219,16 @@ export function UrlDetails({ url, scanResult }: UrlDetailsProps) {
             <AccordionItem value="item-1">
               <AccordionTrigger>
                 <div className="flex items-center gap-2">
-                  <AlertTriangle className={`h-4 w-4 ${getThreatLevelColor(scanResult.threat_level || "UNKNOWN")}`} />
+                  <AlertTriangle className={`h-4 w-4 ${getThreatLevelColor(result.threat_level || "UNKNOWN")}`} />
                   <span>Scan Results</span>
                 </div>
               </AccordionTrigger>
               <AccordionContent>
                 <div className="space-y-2 text-sm">
-                  <p>Scan Date: {scanResult.scan_date ? new Date(scanResult.scan_date).toLocaleString() : "Unknown"}</p>
-                  <p>Detections: {scanResult.positives} out of {scanResult.total} security vendors</p>
-                  <Badge variant={scanResult.threat_level === "HIGH" ? "destructive" : "default"}>
-                    {scanResult.threat_level || "UNKNOWN"} Risk
+                  <p>Scan Date: {result.scan_date ? new Date(result.scan_date).toLocaleString() : "Unknown"}</p>
+                  <p>Detections: {result.positives} out of {result.total} security vendors</p>
+                  <Badge variant={result.threat_level === "HIGH" ? "destructive" : "default"}>
+                    {result.threat_level || "UNKNOWN"} Risk
                   </Badge>
                 </div>
               </AccordionContent>
@@ -271,9 +238,9 @@ export function UrlDetails({ url, scanResult }: UrlDetailsProps) {
           <div className="mt-4 pt-4 border-t">
             <h4 className="font-medium mb-2">Recommendations</h4>
             <ul className="space-y-2 text-sm">
-              {scanResult.threat_level && (
+              {result.threat_level && (
                 <>
-                  {scanResult.threat_level === "HIGH" && (
+                  {result.threat_level === "HIGH" && (
                     <>
                       <li className="flex items-start gap-2">
                         <AlertTriangle className="h-4 w-4 mt-0.5 text-red-500" />
@@ -285,7 +252,7 @@ export function UrlDetails({ url, scanResult }: UrlDetailsProps) {
                       </li>
                     </>
                   )}
-                  {scanResult.threat_level === "MEDIUM" && (
+                  {result.threat_level === "MEDIUM" && (
                     <>
                       <li className="flex items-start gap-2">
                         <AlertTriangle className="h-4 w-4 mt-0.5 text-yellow-500" />
@@ -297,7 +264,7 @@ export function UrlDetails({ url, scanResult }: UrlDetailsProps) {
                       </li>
                     </>
                   )}
-                  {scanResult.threat_level === "UNKNOWN" && (
+                  {result.threat_level === "UNKNOWN" && (
                     <>
                       <li className="flex items-start gap-2">
                         <Shield className="h-4 w-4 mt-0.5 text-blue-500" />
@@ -309,7 +276,7 @@ export function UrlDetails({ url, scanResult }: UrlDetailsProps) {
                       </li>
                     </>
                   )}
-                  {scanResult.threat_level === "LOW" && (
+                  {result.threat_level === "LOW" && (
                     <>
                       <li className="flex items-start gap-2">
                         <Shield className="h-4 w-4 mt-0.5 text-green-500" />
@@ -323,7 +290,7 @@ export function UrlDetails({ url, scanResult }: UrlDetailsProps) {
                   )}
                 </>
               )}
-              {scanResult.recommendations?.map((rec, index) => (
+              {result.recommendations?.map((rec, index) => (
                 <li key={index} className="flex items-start gap-2">
                   {rec.severity === "critical" && <AlertTriangle className="h-4 w-4 mt-0.5 text-red-500" />}
                   {rec.severity === "warning" && <AlertTriangle className="h-4 w-4 mt-0.5 text-yellow-500" />}
@@ -332,7 +299,7 @@ export function UrlDetails({ url, scanResult }: UrlDetailsProps) {
                   <span>{rec.message}</span>
                 </li>
               ))}
-              {!scanResult.threat_level && !scanResult.recommendations?.length && (
+              {!result.threat_level && !result.recommendations?.length && (
                 <li className="flex items-start gap-2">
                   <Shield className="h-4 w-4 mt-0.5 text-gray-500" />
                   <span>No specific recommendations available for this URL.</span>

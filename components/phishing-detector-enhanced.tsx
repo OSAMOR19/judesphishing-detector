@@ -29,26 +29,36 @@ import { ScanHistoryTable } from "./scan-history/history-table"
 import { UrlDetails } from "./detailed-results/url-details"
 import { WorldMap } from "./threat-map/world-map"
 import { ReportButton } from "./report-generator/report-button"
+import { ScanResult } from "@/types/scan"
 
-interface ScanResult {
-  status: "success" | "unknown" | "error"
-  isMalicious?: boolean
+interface VirusTotalResponse {
+  status: "success" | "unknown" | "error" | "pending"
+  message?: string
+  analysis_id?: string
   positives?: number
   total?: number
   scan_date?: string
-  message?: string
-  location?: string
-  country?: string
-  ipAddress?: string
-  emailBody?: string
-  threat_level?: "HIGH" | "MEDIUM" | "LOW" | "UNKNOWN"
+  url?: string
+  threat_level?: string
   recommendations?: Array<{
-    severity: "critical" | "warning" | "info" | "success"
+    severity: string
     message: string
     action: string
   }>
+  domain_age?: string
+  registrar?: string
+  creation_date?: string
+  expiration_date?: string
+  location?: string
+  country?: string
+  ipAddress?: string
+  has_ssl?: boolean
+  redirects?: boolean
+  is_private?: boolean
+  is_proxy?: boolean
+  name_servers?: string[]
+  domain_status?: string[]
   urls?: string[]
-  isPdf?: boolean
 }
 
 export default function PhishingDetectorEnhanced() {
@@ -58,107 +68,141 @@ export default function PhishingDetectorEnhanced() {
   const [isDark, setIsDark] = useState(false)
   const [activeTab, setActiveTab] = useState("url")
   const [activeSection, setActiveSection] = useState("scanner")
+  const [error, setError] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
 
   const [file, setFile] = useState<File | null>(null);
 
-  const checkInput = async () => {
-    if (activeTab === "pdf" && !file) {
-      toast.error("Please select a PDF file to scan");
-      return;
-    }
-    if (activeTab !== "pdf" && !input) {
-      toast.error("Please enter a value to scan");
-      return;
-    }
-
-    setLoading(true);
+  const handleScan = async () => {
     try {
-      const endpoint =
-        activeTab === "url" 
-          ? "/api/check-url" 
-          : activeTab === "email" 
-            ? "/api/check-email" 
-            : "/api/check-pdf";
-        
-        let body;
-        let headers = {};
-        
-        if (activeTab === "pdf") {
-          const formData = new FormData();
-          formData.append("file", file!);
-          body = formData;
-          // No Content-Type header for FormData - browser sets it automatically with boundary
-        } else {
-          body = JSON.stringify({ input });
-          headers = { "Content-Type": "application/json" };
-        }
+      setIsLoading(true)
+      setError(null)
+      setResult(null)
 
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: activeTab === "pdf" ? undefined : headers,
-        body,
-      });
+      let response: Response | undefined
+      let data: VirusTotalResponse
 
-      if (!response.ok) {
-        let errorMessage = "Server error occurred";
-        try {
-          const errorText = await response.text();
-          if (errorText.includes('<!DOCTYPE')) {
-            errorMessage = 'Server error occurred';
-          } else {
-            try {
-              const errorJson = JSON.parse(errorText);
-              errorMessage = errorJson.message || errorText;
-            } catch {
-              errorMessage = errorText;
+      if (activeTab === "url") {
+        response = await fetch("/api/check-url", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ input: input }),
+        })
+
+        data = await response.json()
+
+        if (data.status === "pending") {
+          // Start polling for results
+          const pollInterval = setInterval(async () => {
+            const pollResponse = await fetch("/api/check-analysis", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                analysis_id: data.analysis_id,
+                url: input
+              }),
+            })
+
+            const pollData = await pollResponse.json()
+
+            if (pollData.status === "success") {
+              clearInterval(pollInterval)
+              setResult(pollData)
+              setLoading(false)
+            } else if (pollData.status === "error") {
+              clearInterval(pollInterval)
+              setError(pollData.message)
+              setLoading(false)
             }
-          }
-        } catch (e) {
-          console.error("Error parsing error response:", e);
+            // If status is still "pending", continue polling
+          }, 5000) // Poll every 5 seconds
+
+          // Clear interval after 2 minutes (timeout)
+          setTimeout(() => {
+            clearInterval(pollInterval)
+            if (loading) {
+              setError("Scan timed out. Please try again.")
+              setLoading(false)
+            }
+          }, 120000)
+
+          return
         }
-        throw new Error(errorMessage);
+      } else if (activeTab === "email") {
+        response = await fetch("/api/check-email", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ input: input }),
+        })
+      } else if (activeTab === "pdf") {
+        if (!file) {
+          toast.error("Please select a PDF file to scan")
+          return
+        }
+
+        const formData = new FormData()
+        formData.append("file", file)
+
+        response = await fetch("/api/check-pdf", {
+          method: "POST",
+          body: formData,
+        })
       }
 
-      const data = await response.json();
+      if (!response?.ok) {
+        throw new Error("Failed to scan input")
+      }
 
-      if (!response.ok) {
+      data = await response.json()
+
+      if (data.status === "error") {
         throw new Error(data.message || "Failed to scan input")
       }
 
-      // Transform the data to match our ScanResult interface
+      // Transform the data to match the ScanResult interface
       const transformedData: ScanResult = {
-        status: data.status,
-        isMalicious: data.positives > 0,
-        positives: data.positives,
-        total: data.total,
-        scan_date: data.scan_date,
-        threat_level: data.threat_level,
-        recommendations: data.recommendations,
+        status: "success",
+        isMalicious: (data.positives || 0) > 0,
+        positives: data.positives || 0,
+        total: data.total || 0,
+        scan_date: data.scan_date || new Date().toISOString(),
+        threat_level: (data.threat_level || "UNKNOWN") as "HIGH" | "MEDIUM" | "LOW" | "UNKNOWN",
+        recommendations: (data.recommendations || []).map(rec => ({
+          severity: (rec.severity || "info") as "critical" | "warning" | "info" | "success",
+          message: rec.message,
+          action: rec.action
+        })),
+        domain_age: data.domain_age,
+        registrar: data.registrar,
+        creation_date: data.creation_date,
+        expiration_date: data.expiration_date,
         location: data.location,
         country: data.country,
         ipAddress: data.ipAddress,
-        message: data.message,
-        // Include URLs found in PDF if available
-        urls: data.urls || [],
-        // Set isPdf flag for PDF scans
-        isPdf: activeTab === "pdf",
+        has_ssl: data.has_ssl,
+        redirects: data.redirects,
+        is_private: data.is_private,
+        is_proxy: data.is_proxy,
+        name_servers: data.name_servers,
+        domain_status: data.domain_status,
+        urls: data.urls,
+        isPdf: activeTab === "pdf"
       }
 
       setResult(transformedData)
-
-      if (data.status === "success") {
-        toast.success("Scan completed")
-      } else if (data.status === "unknown") {
-        toast.info("Input not found in database")
-      }
     } catch (error) {
+      console.error("Error scanning:", error)
+      setError(error instanceof Error ? error.message : "Failed to scan input")
       toast.error(error instanceof Error ? error.message : "Failed to scan input")
-      setResult({
-        status: "error",
-        message: error instanceof Error ? error.message : "An unknown error occurred",
-      })
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }
 
   const getResultIcon = () => {
@@ -252,9 +296,9 @@ export default function PhishingDetectorEnhanced() {
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
                         className="backdrop-blur-sm bg-white/50 dark:bg-gray-700/50"
-                        onKeyDown={(e) => e.key === "Enter" && checkInput()}
+                        onKeyDown={(e) => e.key === "Enter" && handleScan()}
                       />
-                      <Button onClick={checkInput} disabled={loading || !input}>
+                      <Button onClick={handleScan} disabled={loading || !input}>
                         {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : "Scan"}
                       </Button>
                     </div>
@@ -274,9 +318,9 @@ export default function PhishingDetectorEnhanced() {
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
                         className="backdrop-blur-sm bg-white/50 dark:bg-gray-700/50"
-                        onKeyDown={(e) => e.key === "Enter" && checkInput()}
+                        onKeyDown={(e) => e.key === "Enter" && handleScan()}
                       />
-                      <Button onClick={checkInput} disabled={loading || !input}>
+                      <Button onClick={handleScan} disabled={loading || !input}>
                         {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : "Scan"}
                       </Button>
                     </div>
@@ -302,7 +346,7 @@ export default function PhishingDetectorEnhanced() {
                         }}
                         className="backdrop-blur-sm bg-white/50 dark:bg-gray-700/50"
                       />
-                      <Button onClick={checkInput} disabled={loading || !file}
+                      <Button onClick={handleScan} disabled={loading || !file}
                       >
                         {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : "Scan"}
                       </Button>
@@ -369,7 +413,7 @@ export default function PhishingDetectorEnhanced() {
                       {/* Detailed results section */}
                       {result.status === "success" && activeTab === "url" && (
                         <div className="mt-6">
-                          <UrlDetails url={input} scanResult={result} />
+                          <UrlDetails result={result} />
                         </div>
                       )}
 
@@ -389,11 +433,6 @@ export default function PhishingDetectorEnhanced() {
                           {result.ipAddress && (
                             <p className="mt-2">
                               <strong>IP Address:</strong> {result.ipAddress}
-                            </p>
-                          )}
-                          {result.emailBody && (
-                            <p className="mt-2">
-                              <strong>Email Body:</strong> {result.emailBody}
                             </p>
                           )}
                         </div>

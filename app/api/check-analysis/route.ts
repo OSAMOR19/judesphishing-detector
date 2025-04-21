@@ -2,10 +2,12 @@ import { NextResponse } from "next/server"
 
 export async function POST(request: Request) {
   try {
-    const { input } = await request.json()
+    const { analysis_id, url } = await request.json()
 
-    if (!input) {
-      return NextResponse.json({ message: "URL is required" }, { status: 400 })
+    if (!analysis_id || !url) {
+      return NextResponse.json({ 
+        message: "Analysis ID and URL are required" 
+      }, { status: 400 })
     }
 
     // Get VirusTotal API key from environment variables
@@ -20,31 +22,9 @@ export async function POST(request: Request) {
       }, { status: 500 })
     }
 
-    // Get WHOIS API key from environment variables
-    const whoisApiKey = process.env.WHOISXML_API_KEY
-    
-    if (!whoisApiKey) {
-      console.error("WHOIS API key not found in environment variables")
-      return NextResponse.json({ 
-        message: "API configuration error", 
-        details: "WHOIS API key is not configured. Please check your environment variables.",
-        error: "MISSING_WHOIS_API_KEY"
-      }, { status: 500 })
-    }
-
-    console.log(`Checking URL: ${input}`)
-    console.log('Environment check:', {
-      hasVirusTotalKey: !!apiKey,
-      hasWhoisKey: !!whoisApiKey,
-      appUrl: process.env.NEXT_PUBLIC_APP_URL
-    })
-
-    // Prepare URL for VirusTotal API
-    const encodedUrl = encodeURIComponent(input)
-    
-    // First, check if the URL has already been analyzed
-    const reportResponse = await fetch(
-      `https://www.virustotal.com/api/v3/urls/${encodedUrl}`,
+    // Get the analysis results
+    const analysisResponse = await fetch(
+      `https://www.virustotal.com/api/v3/analyses/${analysis_id}`,
       {
         method: "GET",
         headers: {
@@ -54,51 +34,22 @@ export async function POST(request: Request) {
       }
     )
 
-    let result
-    let analysisId
-
-    // Log the initial response status
-    console.log('VirusTotal initial response status:', reportResponse.status)
-
-    // If the URL hasn't been analyzed before or we need fresh results
-    if (!reportResponse.ok || reportResponse.status === 404) {
-      console.log('Submitting URL for new analysis')
-      // Submit URL for scanning
-      const scanResponse = await fetch(
-        "https://www.virustotal.com/api/v3/urls",
-        {
-          method: "POST",
-          headers: {
-            "x-apikey": apiKey,
-            "Content-Type": "application/x-www-form-urlencoded",
-          },
-          body: `url=${encodedUrl}`,
-        }
-      )
-
-      if (!scanResponse.ok) {
-        console.error("VirusTotal scan failed:", await scanResponse.text())
-        throw new Error(`VirusTotal scan failed: ${scanResponse.statusText}`)
-      }
-
-      const scanData = await scanResponse.json()
-      analysisId = scanData.data.id
-
-      console.log('Analysis ID:', analysisId)
-
-      // Instead of waiting, return immediately with a pending status
-      return NextResponse.json({
-        status: "pending",
-        message: "URL scan in progress",
-        analysis_id: analysisId,
-        url: input
-      })
-    } else {
-      result = await reportResponse.json()
+    if (!analysisResponse.ok) {
+      console.error("VirusTotal analysis failed:", await analysisResponse.text())
+      throw new Error(`VirusTotal analysis failed: ${analysisResponse.statusText}`)
     }
 
-    // Log the full result for debugging
-    console.log('VirusTotal result:', JSON.stringify(result, null, 2))
+    const result = await analysisResponse.json()
+    
+    // Check if analysis is still in progress
+    if (result.data.attributes.status === "in-progress") {
+      return NextResponse.json({
+        status: "pending",
+        message: "Analysis still in progress",
+        analysis_id,
+        url
+      })
+    }
 
     // Extract relevant information from the VirusTotal response
     const stats = result.data.attributes.stats
@@ -109,31 +60,24 @@ export async function POST(request: Request) {
     const recommendations = generateRecommendations(stats, threatLevel)
     
     // Get domain information using WHOIS API
-    const domainInfo = await getDomainInfo(input)
-
-    // Log final response data
-    console.log('Final response:', {
-      stats,
-      threatLevel,
-      recommendations
-    })
+    const domainInfo = await getDomainInfo(url)
 
     return NextResponse.json({
       status: "success",
       positives: stats.malicious,
       total: stats.malicious + stats.suspicious + stats.harmless + stats.undetected,
       scan_date: new Date(scanDate * 1000).toISOString(),
-      url: input,
+      url: url,
       threat_level: threatLevel,
       recommendations: recommendations,
       ...domainInfo,
     })
   } catch (error) {
-    console.error("Error checking URL:", error)
+    console.error("Error checking analysis:", error)
     return NextResponse.json({ 
-      message: "Failed to check URL", 
+      message: "Failed to check analysis", 
       error: String(error),
-      details: "An error occurred while checking the URL. Please try again later."
+      details: "An error occurred while checking the analysis. Please try again later."
     }, { status: 500 })
   }
 }
@@ -295,4 +239,4 @@ async function getDomainInfo(url: string) {
       domain_status: [],
     };
   }
-}
+} 
