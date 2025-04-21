@@ -12,11 +12,32 @@ export async function POST(request: Request) {
     const apiKey = process.env.VIRUSTOTAL_API_KEY
     
     if (!apiKey) {
-      console.error("VirusTotal API key not found")
-      return NextResponse.json({ message: "API configuration error" }, { status: 500 })
+      console.error("VirusTotal API key not found in environment variables")
+      return NextResponse.json({ 
+        message: "API configuration error", 
+        details: "VirusTotal API key is not configured. Please check your environment variables.",
+        error: "MISSING_API_KEY"
+      }, { status: 500 })
+    }
+
+    // Get WHOIS API key from environment variables
+    const whoisApiKey = process.env.WHOISXML_API_KEY
+    
+    if (!whoisApiKey) {
+      console.error("WHOIS API key not found in environment variables")
+      return NextResponse.json({ 
+        message: "API configuration error", 
+        details: "WHOIS API key is not configured. Please check your environment variables.",
+        error: "MISSING_WHOIS_API_KEY"
+      }, { status: 500 })
     }
 
     console.log(`Checking URL: ${input}`)
+    console.log('Environment check:', {
+      hasVirusTotalKey: !!apiKey,
+      hasWhoisKey: !!whoisApiKey,
+      appUrl: process.env.NEXT_PUBLIC_APP_URL
+    })
 
     // Prepare URL for VirusTotal API
     const encodedUrl = encodeURIComponent(input)
@@ -123,7 +144,11 @@ export async function POST(request: Request) {
     })
   } catch (error) {
     console.error("Error checking URL:", error)
-    return NextResponse.json({ message: "Failed to check URL", error: String(error) }, { status: 500 })
+    return NextResponse.json({ 
+      message: "Failed to check URL", 
+      error: String(error),
+      details: "An error occurred while checking the URL. Please try again later."
+    }, { status: 500 })
   }
 }
 
