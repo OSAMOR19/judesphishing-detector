@@ -140,7 +140,7 @@ export function UrlDetails({ url, scanResult }: UrlDetailsProps) {
             {scanResult.isPdf ? "PDF Information" : "Domain Information"}
           </CardTitle>
           <CardDescription>
-            {scanResult.isPdf ? "Technical details about this PDF" : "Technical details about this domain"}
+            {scanResult.isPdf ? "Technical details about this PDF" : "These are the Technical details about this domain"}
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
